@@ -9,9 +9,6 @@ Parameters:
   ProjectId:
     Type: String
     Description: AWS CodeStar project ID used to name project resources and create roles.
-  InstanceType:
-    Type: String
-    Description: The type of Amazon EC2 Linux instances that will be launched for this project.
   KeyPairName:
     Type: String
     Description: The name of an existing Amazon EC2 key pair in the region where the project is created, which you can use to SSH into the new Amazon EC2 Linux instances.
@@ -21,75 +18,185 @@ Parameters:
   SubnetId:
     Type: String
     Description: The name of the VPC subnet used for the new Amazon EC2 Linux instances launched for this project.
-  SolutionStackName:
-    Type: String
-    Description: The software stack used to launch environments and configure instances in AWS Elastic Beanstalk.
-  EBTrustRole:
-    Type: String
-    Description: The service role in IAM for AWS Elastic Beanstalk to be created for this project.
-  EBInstanceProfile:
-    Type: String
-    Description: The IAM role that will be created for the Amazon EC2 Linux instances.
   Stage:
     Type: String
     Description: The name for a project pipeline stage, such as Staging or Prod, for which resources are provisioned and deployed.
     Default: ''
+  SubnetB:
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-31aa2a49
+  Image:
+    Type: String
+    Default: 755242612616.dkr.ecr.us-west-2.amazonaws.com/poc-spring-app:latest
+  ServiceName:
+    Type: String
+    Default: poc-spring-app
+  ContainerPort:
+    Type: Number
+    Default: 80
+  LoadBalancerPort:
+    Type: Number
+    Default: 80
+  HealthCheckPath:
+    Type: String
+    Default: /health
+  MinContainers:
+    Type: Number
+    Default: 2
+  MaxContainers:
+    Type: Number
+    Default: 10
+  AutoScalingTargetValue:
+    Type: Number
+    Default: 50
+  ExecutionRole:
+    Type: String
+    Description: Role needed by ECS and containers
+    Default: arn:aws:iam::755242612616:role/ecsTaskExecutionRole
+  AutoscalingRole:
+    Type: String
+    Description: Role need for autoscaling
+    Default: arn:aws:iam::755242612616:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling
 Resources:
-  EBApplication:
-    Description: The AWS Elastic Beanstalk application, which is a container used to deploy the correct application configuration.
-    Type: AWS::ElasticBeanstalk::Application
+  Cluster:
+    Type: AWS::ECS::Cluster
     Properties:
-      ApplicationName: !Sub '${ProjectId}app${Stage}'
-      Description: The name of the AWS Elastic Beanstalk application to be created for this project.
-  EBApplicationVersion:
-    Description: The version of the AWS Elastic Beanstalk application to be created for this project.
-    Type: AWS::ElasticBeanstalk::ApplicationVersion
+      ClusterName: !Join ['', [!Ref ServiceName, Cluster]]
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    DependsOn: LogGroup
     Properties:
-      ApplicationName: !Ref 'EBApplication'
-      Description: The application version number.
-      SourceBundle: 'target/ROOT'
-  EBConfigurationTemplate:
-    Description: The AWS Elastic Beanstalk configuration template to be created for this project, which defines configuration settings used to deploy different versions of an application.
-    Type: AWS::ElasticBeanstalk::ConfigurationTemplate
+      Family: !Join ['', [!Ref ServiceName, TaskDefinition]]
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 256
+      Memory: 0.5GB
+      ExecutionRoleArn: !Ref ExecutionRole
+      TaskRoleArn: !Ref ExecutionRole
+      ContainerDefinitions:
+        - Name: !Ref ServiceName
+          Image: !Ref Image
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+          # Send logs to CloudWatch Logs
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: ecs
+  ContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      ApplicationName: !Ref 'EBApplication'
-      Description: The name of the sample configuration template.
-      OptionSettings:
-      - Namespace: aws:elasticbeanstalk:environment
-        OptionName: EnvironmentType
-        Value: SingleInstance
-      - Namespace: aws:elasticbeanstalk:environment
-        OptionName: ServiceRole
-        Value: !Ref 'EBTrustRole'
-      - Namespace: aws:elasticbeanstalk:healthreporting:system
-        OptionName: SystemType
-        Value: enhanced
-      SolutionStackName: !Ref 'SolutionStackName'
-  EBEnvironment:
-    Description: The AWS Elastic Beanstalk deployment group where the application is deployed, which is made up of the Amazon EC2 Linux instances launched for this project.
-    Type: AWS::ElasticBeanstalk::Environment
+      GroupDescription: !Join ['', [!Ref ServiceName, ContainerSecurityGroup]]
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      ApplicationName: !Ref 'EBApplication'
-      EnvironmentName: !Ref 'EBApplication'
-      Description: The application to be deployed to the environment.
-      TemplateName: !Ref 'EBConfigurationTemplate'
-      VersionLabel: !Ref 'EBApplicationVersion'
-      OptionSettings:
-      - Namespace: aws:autoscaling:launchconfiguration
-        OptionName: IamInstanceProfile
-        Value: !Ref 'EBInstanceProfile'
-      - Namespace: aws:autoscaling:launchconfiguration
-        OptionName: InstanceType
-        Value: !Ref 'InstanceType'
-      - Namespace: aws:autoscaling:launchconfiguration
-        OptionName: EC2KeyName
-        Value: !Ref 'KeyPairName'
-      - Namespace: aws:ec2:vpc
-        OptionName: VPCId
-        Value: !Ref 'VpcId'
-      - !If
-        - UseSubnet
-        - Namespace: 'aws:ec2:vpc'
-          OptionName: Subnets
-          Value: !Ref 'SubnetId'
-        - !Ref "AWS::NoValue"
+      GroupDescription: !Join ['', [!Ref ServiceName, LoadBalancerSecurityGroup]]
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref LoadBalancerPort
+          ToPort: !Ref LoadBalancerPort
+          CidrIp: 0.0.0.0/0
+  Service:
+    Type: AWS::ECS::Service
+    # This dependency is needed so that the load balancer is setup correctly in time
+    DependsOn:
+      - ListenerHTTP
+    Properties: 
+      ServiceName: !Ref ServiceName
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+      DesiredCount: 2
+      # This may need to be adjusted if the container takes a while to start up
+      HealthCheckGracePeriodSeconds: 30
+      LaunchType: FARGATE
+      NetworkConfiguration: 
+        AwsvpcConfiguration:
+          # change to DISABLED if you're using private subnets that have access to a NAT gateway
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref SubnetId
+            - !Ref SubnetB
+          SecurityGroups:
+            - !Ref ContainerSecurityGroup
+      LoadBalancers:
+        - ContainerName: !Ref ServiceName
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref TargetGroup
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      # will look for a 200 status code by default unless specified otherwise
+      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckTimeoutSeconds: 5
+      UnhealthyThresholdCount: 2
+      HealthyThresholdCount: 2
+      Name: !Join ['', [!Ref ServiceName, TargetGroup]]
+      Port: !Ref ContainerPort
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 60 # default is 300
+      TargetType: ip
+      VpcId: !Ref VpcId
+  ListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: !Ref LoadBalancerPort
+      Protocol: HTTP
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: 60
+      Name: !Join ['', [!Ref ServiceName, LoadBalancer]]
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets:
+        - !Ref SubnetId
+        - !Ref SubnetB
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Join ['', [/ecs/, !Ref ServiceName, TaskDefinition]]
+  AutoScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MinCapacity: !Ref MinContainers
+      MaxCapacity: !Ref MaxContainers
+      ResourceId: !Join ['/', [service, !Ref Cluster, !GetAtt Service.Name]]
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+      # "The Amazon Resource Name (ARN) of an AWS Identity and Access Management (IAM) role that allows Application Auto Scaling to modify your scalable target."
+      RoleARN: !Ref AutoscalingRole
+  AutoScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Join ['', [!Ref ServiceName, AutoScalingPolicy]]
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AutoScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleInCooldown: 10
+        ScaleOutCooldown: 10
+        TargetValue: !Ref AutoScalingTargetValue

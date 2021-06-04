@@ -64,11 +64,11 @@ Parameters:
   ExecutionRole:
     Type: String
     Description: Role needed by ECS and containers
-    Default: arn:aws:iam::755242612616:role/ecsTaskExecutionRole
+    Default: arn:aws:iam::755242612616:role/poc-ecs-task-role
   AutoscalingRole:
     Type: String
     Description: Role need for autoscaling
-    Default: arn:aws:iam::755242612616:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling
+    Default: arn:aws:iam::755242612616:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
 Resources:
   Cluster:
     Type: AWS::ECS::Cluster

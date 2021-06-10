@@ -77,7 +77,7 @@ Parameters:
     Default: arn:aws:elasticloadbalancing:us-west-2:755242612616:loadbalancer/app/poc-spring-test/6940976dd63fa1c9
   ContainerSecurityGroupId:
     Type: String
-    Default: sg-0a33a03b245f65710
+    Default: sg-0eb60baceec61d3ba
 Resources:
   Cluster:
     Type: AWS::ECS::Cluster

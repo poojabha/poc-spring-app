@@ -69,6 +69,12 @@ Parameters:
     Type: String
     Description: Role need for autoscaling
     Default: arn:aws:iam::755242612616:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+  TargetGroupARN:
+    Type: String
+    Default: arn:aws:elasticloadbalancing:us-west-2:755242612616:targetgroup/poc-spring-app-test/818808adf85a2c62
+  LoadBalancerARN:
+    Type: String
+    Default: arn:aws:elasticloadbalancing:us-west-2:755242612616:loadbalancer/app/poc-spring-app-test/0b735e28cbafffad
 Resources:
   Cluster:
     Type: AWS::ECS::Cluster
@@ -146,7 +152,7 @@ Resources:
       LoadBalancers:
         - ContainerName: !Ref ServiceName
           ContainerPort: !Ref ContainerPort
-          TargetGroupArn: !Ref TargetGroup
+          TargetGroupArn: !Ref TargetGroupARN
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -170,7 +176,7 @@ Resources:
       DefaultActions:
         - TargetGroupArn: !Ref TargetGroup
           Type: forward
-      LoadBalancerArn: !Ref LoadBalancer
+      LoadBalancerArn: !Ref LoadBalancerARN
       Port: !Ref LoadBalancerPort
       Protocol: HTTP
   LoadBalancer:

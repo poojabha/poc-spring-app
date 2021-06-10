@@ -42,7 +42,7 @@ Parameters:
     Default: 755242612616.dkr.ecr.us-west-2.amazonaws.com/poc-spring-app:latest
   ServiceName:
     Type: String
-    Default: poc-spring-app-test
+    Default: poc-spring-test
   ContainerPort:
     Type: Number
     Default: 80
@@ -71,10 +71,13 @@ Parameters:
     Default: arn:aws:iam::755242612616:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
   TargetGroupARN:
     Type: String
-    Default: arn:aws:elasticloadbalancing:us-west-2:755242612616:targetgroup/poc-spring-app-test/818808adf85a2c62
+    Default: arn:aws:elasticloadbalancing:us-west-2:755242612616:targetgroup/poc-spring-test/e88e82f7d45bd928
   LoadBalancerARN:
     Type: String
-    Default: arn:aws:elasticloadbalancing:us-west-2:755242612616:loadbalancer/app/poc-spring-app-test/0b735e28cbafffad
+    Default: arn:aws:elasticloadbalancing:us-west-2:755242612616:loadbalancer/app/poc-spring-test/6940976dd63fa1c9
+  ContainerSecurityGroupId:
+    Type: String
+    Default: sg-0a33a03b245f65710
 Resources:
   Cluster:
     Type: AWS::ECS::Cluster
@@ -104,16 +107,6 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-group: !Ref LogGroup
               awslogs-stream-prefix: ecs
-  ContainerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Join ['', [!Ref ServiceName, ContainerSecurityGroup]]
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: !Ref ContainerPort
-          ToPort: !Ref ContainerPort
-          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -146,7 +139,7 @@ Resources:
             - !Ref SubnetId
             - !Ref SubnetB
           SecurityGroups:
-            - !Ref ContainerSecurityGroup
+            - !Ref ContainerSecurityGroupId
       LoadBalancers:
         - ContainerName: !Ref ServiceName
           ContainerPort: !Ref ContainerPort

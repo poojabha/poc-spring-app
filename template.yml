@@ -42,7 +42,7 @@ Parameters:
     Default: 755242612616.dkr.ecr.us-west-2.amazonaws.com/poc-spring-app:latest
   ServiceName:
     Type: String
-    Default: poc-spring-test
+    Default: poc-spring-app-test
   ContainerPort:
     Type: Number
     Default: 80

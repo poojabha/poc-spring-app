@@ -39,10 +39,10 @@ Parameters:
     Default: subnet-31aa2a49
   Image:
     Type: String
-    Default: 755242612616.dkr.ecr.us-west-2.amazonaws.com/poc-spring-app:latest
+    Default: 755242612616.dkr.ecr.us-west-2.amazonaws.com/poc-spring-app-dev:latest
   ServiceName:
     Type: String
-    Default: poc-spring-app-test
+    Default: poc-spring-app
   ContainerPort:
     Type: Number
     Default: 80
@@ -84,12 +84,12 @@ Resources:
   Cluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Join ['', [!Ref ServiceName, Cluster, Environment]]
+      ClusterName: !Join ['-', [!Ref ServiceName, Cluster, !Ref Environment]]
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     DependsOn: LogGroup
     Properties:
-      Family: !Join ['', [!Ref ServiceName, TaskDefinition, Environment]]
+      Family: !Join ['-', [!Ref ServiceName, TaskDefinition, !Ref Environment]]
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -112,7 +112,7 @@ Resources:
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: !Join ['', [!Ref ServiceName, LoadBalancerSecurityGroup, Environment]]
+      GroupDescription: !Join ['-', [!Ref ServiceName, LoadBalancerSecurityGroup, !Ref Environment]]
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -149,7 +149,7 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Join ['', [/ecs/, !Ref ServiceName, TaskDefinition, Environment]]
+      LogGroupName: !Join ['-', [/ecs/, !Ref ServiceName, TaskDefinition, !Ref Environment]]
   AutoScalingTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
@@ -163,7 +163,7 @@ Resources:
   AutoScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: !Join ['', [!Ref ServiceName, AutoScalingPolicy, Environment]]
+      PolicyName: !Join ['-', [!Ref ServiceName, AutoScalingPolicy, !Ref Environment]]
       PolicyType: TargetTrackingScaling
       ScalingTargetId: !Ref AutoScalingTarget
       TargetTrackingScalingPolicyConfiguration:

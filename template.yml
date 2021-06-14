@@ -33,13 +33,17 @@ Parameters:
   Stage:
     Type: String
     Description: The name for a project pipeline stage, such as Staging or Prod, for which resources are provisioned and deployed.
+    AllowedValues:
+      - dev
+      - integration
+      - staging
+      - production
     Default: ''
   SubnetB:
     Type: AWS::EC2::Subnet::Id
-    Default: subnet-31aa2a49
   Image:
     Type: String
-    Default: 755242612616.dkr.ecr.us-west-2.amazonaws.com/poc-spring-app-dev:latest
+    Description: Docker repository ARN with tag.
   ServiceName:
     Type: String
     Default: poc-spring-app
@@ -78,18 +82,16 @@ Parameters:
   ContainerSecurityGroupId:
     Type: String
     Default: sg-0eb60baceec61d3ba
-  Environment:
-    Type: String
 Resources:
   Cluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Join ['-', [!Ref ServiceName, Cluster, !Ref Environment]]
+      ClusterName: !Join ['-', [!Ref ServiceName, Cluster, !Ref Stage]]
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     DependsOn: LogGroup
     Properties:
-      Family: !Join ['-', [!Ref ServiceName, TaskDefinition, !Ref Environment]]
+      Family: !Join ['-', [!Ref ServiceName, TaskDefinition, !Ref Stage]]
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -112,7 +114,7 @@ Resources:
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: !Join ['-', [!Ref ServiceName, LoadBalancerSecurityGroup, !Ref Environment]]
+      GroupDescription: !Join ['-', [!Ref ServiceName, LoadBalancerSecurityGroup, !Ref Stage]]
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -149,7 +151,7 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Join ['-', [/ecs/, !Ref ServiceName, TaskDefinition, !Ref Environment]]
+      LogGroupName: !Join ['-', [/ecs/, !Ref ServiceName, TaskDefinition, !Ref Stage]]
   AutoScalingTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
@@ -163,7 +165,7 @@ Resources:
   AutoScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: !Join ['-', [!Ref ServiceName, AutoScalingPolicy, !Ref Environment]]
+      PolicyName: !Join ['-', [!Ref ServiceName, AutoScalingPolicy, !Ref Stage]]
       PolicyType: TargetTrackingScaling
       ScalingTargetId: !Ref AutoScalingTarget
       TargetTrackingScalingPolicyConfiguration:

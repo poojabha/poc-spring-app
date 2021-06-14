@@ -1,6 +1,7 @@
 package com.aws.codestar.projecttemplates.controller;
 
 import org.json.JSONObject;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -12,7 +13,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/hello")
 public class HelloWorldController {
 
-	private static final String MESSAGE_FORMAT = "Hi %s!";
+	@Value("${helloworld.name}")
+	private String environmentName;
+
+	private static final String MESSAGE_FORMAT = "Hi %s %s!";
 
 	@GetMapping(produces = "application/json")
 	public ResponseEntity<String> helloWorldGet(@RequestParam(value = "name", defaultValue = "World") String name) {
@@ -25,6 +29,6 @@ public class HelloWorldController {
 	}
 
 	private String createResponse(String name) {
-		return new JSONObject().put("Output", String.format(MESSAGE_FORMAT, name)).toString();
+		return new JSONObject().put("Output", String.format(MESSAGE_FORMAT, environmentName, name)).toString();
 	}
 }

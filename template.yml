@@ -33,13 +33,17 @@ Parameters:
   Stage:
     Type: String
     Description: The name for a project pipeline stage, such as Staging or Prod, for which resources are provisioned and deployed.
-    Default: ''
+    AllowedValues:
+      - dev
+      - integration
+      - staging
+      - production
+    Default: dev
   SubnetB:
     Type: AWS::EC2::Subnet::Id
-    Default: subnet-31aa2a49
   Image:
     Type: String
-    Default: 755242612616.dkr.ecr.us-west-2.amazonaws.com/poc-spring-app:latest
+    Description: Docker repository ARN with tag.
   ServiceName:
     Type: String
     Default: poc-spring-app
@@ -69,16 +73,24 @@ Parameters:
     Type: String
     Description: Role need for autoscaling
     Default: arn:aws:iam::755242612616:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+  TargetGroupARN:
+    Type: String
+    Default: arn:aws:elasticloadbalancing:us-west-2:755242612616:targetgroup/poc-spring-test/e88e82f7d45bd928
+  ContainerSecurityGroupId:
+    Type: String
+    Default: sg-0eb60baceec61d3ba
 Resources:
+  Conditions:
+    isProduction: !Equals [ !Ref Stage, 'production']
   Cluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Join ['', [!Ref ServiceName, Cluster]]
+      ClusterName: !Join ['-', [!Ref ServiceName, Cluster, !Ref Stage]]
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     DependsOn: LogGroup
     Properties:
-      Family: !Join ['', [!Ref ServiceName, TaskDefinition]]
+      Family: !Join ['-', [!Ref ServiceName, TaskDefinition, !Ref Stage]]
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -98,31 +110,30 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-group: !Ref LogGroup
               awslogs-stream-prefix: ecs
-  ContainerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Join ['', [!Ref ServiceName, ContainerSecurityGroup]]
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: !Ref ContainerPort
-          ToPort: !Ref ContainerPort
-          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: !Join ['', [!Ref ServiceName, LoadBalancerSecurityGroup]]
+      GroupDescription: !Join ['-', [!Ref ServiceName, LoadBalancerSecurityGroup, !Ref Stage]]
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: !Ref LoadBalancerPort
           ToPort: !Ref LoadBalancerPort
           CidrIp: 0.0.0.0/0
+  ContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: isProduction
+    Properties:
+      GroupDescription: !Join ['-', [!Ref ServiceName, ContainerSecurityGroup, !Ref Stage]]
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
   Service:
     Type: AWS::ECS::Service
     # This dependency is needed so that the load balancer is setup correctly in time
-    DependsOn:
-      - ListenerHTTP
     Properties: 
       ServiceName: !Ref ServiceName
       Cluster: !Ref Cluster
@@ -142,13 +153,15 @@ Resources:
             - !Ref SubnetId
             - !Ref SubnetB
           SecurityGroups:
-            - !Ref ContainerSecurityGroup
+            - !Ref ContainerSecurityGroupId
       LoadBalancers:
         - ContainerName: !Ref ServiceName
-          ContainerPort: !Ref ContainerPort
-          TargetGroupArn: !Ref TargetGroup
+        - ContainerPort: !Ref ContainerPort
+        -  TargetGroupArn: !Ref TargetGroupARN
+
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Condition: isProduction
     Properties:
       HealthCheckIntervalSeconds: 30
       # will look for a 200 status code by default unless specified otherwise
@@ -156,7 +169,7 @@ Resources:
       HealthCheckTimeoutSeconds: 5
       UnhealthyThresholdCount: 2
       HealthyThresholdCount: 2
-      Name: !Join ['', [!Ref ServiceName, TargetGroup]]
+      Name: !Join ['-', [!Ref ServiceName, TargetGroup, !Ref Stage]]
       Port: !Ref ContainerPort
       Protocol: HTTP
       TargetGroupAttributes:
@@ -166,6 +179,7 @@ Resources:
       VpcId: !Ref VpcId
   ListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: isProduction
     Properties:
       DefaultActions:
         - TargetGroupArn: !Ref TargetGroup
@@ -175,11 +189,12 @@ Resources:
       Protocol: HTTP
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: isProduction
     Properties:
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: 60
-      Name: !Join ['', [!Ref ServiceName, LoadBalancer]]
+      Name: !Join ['-', [!Ref ServiceName, LoadBalancer, !Ref stage]]
       Scheme: internet-facing
       SecurityGroups:
         - !Ref LoadBalancerSecurityGroup
@@ -189,7 +204,7 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Join ['', [/ecs/, !Ref ServiceName, TaskDefinition]]
+      LogGroupName: !Join ['-', [/ecs/, !Ref ServiceName, TaskDefinition, !Ref Stage]]
   AutoScalingTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
@@ -203,7 +218,7 @@ Resources:
   AutoScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: !Join ['', [!Ref ServiceName, AutoScalingPolicy]]
+      PolicyName: !Join ['-', [!Ref ServiceName, AutoScalingPolicy, !Ref Stage]]
       PolicyType: TargetTrackingScaling
       ScalingTargetId: !Ref AutoScalingTarget
       TargetTrackingScalingPolicyConfiguration:

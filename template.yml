@@ -78,16 +78,18 @@ Parameters:
   ContainerSecurityGroupId:
     Type: String
     Default: sg-0eb60baceec61d3ba
+  Environment:
+    Type: String
 Resources:
   Cluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Join ['', [!Ref ServiceName, Cluster]]
+      ClusterName: !Join ['', [!Ref ServiceName, Cluster, Environment]]
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     DependsOn: LogGroup
     Properties:
-      Family: !Join ['', [!Ref ServiceName, TaskDefinition]]
+      Family: !Join ['', [!Ref ServiceName, TaskDefinition, Environment]]
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
@@ -110,7 +112,7 @@ Resources:
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: !Join ['', [!Ref ServiceName, LoadBalancerSecurityGroup]]
+      GroupDescription: !Join ['', [!Ref ServiceName, LoadBalancerSecurityGroup, Environment]]
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -147,7 +149,7 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Join ['', [/ecs/, !Ref ServiceName, TaskDefinition]]
+      LogGroupName: !Join ['', [/ecs/, !Ref ServiceName, TaskDefinition, Environment]]
   AutoScalingTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
@@ -161,7 +163,7 @@ Resources:
   AutoScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: !Join ['', [!Ref ServiceName, AutoScalingPolicy]]
+      PolicyName: !Join ['', [!Ref ServiceName, AutoScalingPolicy, Environment]]
       PolicyType: TargetTrackingScaling
       ScalingTargetId: !Ref AutoScalingTarget
       TargetTrackingScalingPolicyConfiguration:

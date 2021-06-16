@@ -51,10 +51,9 @@ Parameters:
     Default: codestar
   ContainerPort:
     Type: Number
-    Default: 80
   LoadBalancerPort:
     Type: Number
-    Default: 80
+    Default: 443
   HealthCheckPath:
     Type: String
     Default: /health
@@ -75,9 +74,11 @@ Parameters:
     Type: String
     Description: Role need for autoscaling
     Default: arn:aws:iam::755242612616:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+  TargetGroupARN:
+    Type: String
   ContainerSecurityGroupId:
     Type: String
-    Default: sg-0eb60baceec61d3ba
+    Default: sg-094e4ac8742de0b0a
 Resources:
   Cluster:
     Type: AWS::ECS::Cluster
@@ -109,6 +110,7 @@ Resources:
               awslogs-stream-prefix: ecs
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: isProduction
     Properties:
       GroupDescription: !Join ['-', [!Ref ServiceName, LoadBalancerSecurityGroup, !Ref Stage]]
       VpcId: !Ref VpcId
@@ -128,7 +130,39 @@ Resources:
           FromPort: !Ref ContainerPort
           ToPort: !Ref ContainerPort
           SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
-  ListenerHTTP:
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Condition: isProduction
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      # will look for a 200 status code by default unless specified otherwise
+      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckTimeoutSeconds: 5
+      UnhealthyThresholdCount: 2
+      HealthyThresholdCount: 2
+      Name: !Join ['-', [!Ref ServiceName, TargetGroup, !Ref Stage]]
+      Port: !Ref ContainerPort
+      Protocol: HTTPS
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 60 # default is 300
+      TargetType: ip
+      VpcId: !Ref VpcId
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: isProduction
+    Properties:
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: 60
+      Name: !Join ['-', [!Ref ServiceName, LoadBalancer, !Ref Stage]]
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref LoadBalancerSecurityGroup
+      Subnets:
+        - !Ref SubnetId
+        - !Ref SubnetB
+  ListenerHTTPS:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Condition: isProduction
     Properties:
@@ -137,13 +171,13 @@ Resources:
           Type: forward
       LoadBalancerArn: !Ref LoadBalancer
       Port: !Ref LoadBalancerPort
-      Protocol: HTTP
+      Protocol: HTTPS
   productionService:
     Type: AWS::ECS::Service
     # This dependency is needed so that the load balancer is setup correctly in time
     Condition: isProduction
     DependsOn:
-      - ListenerHTTP
+      - ListenerHTTPS
     Properties:
       ServiceName: !Ref ServiceName
       Cluster: !Ref Cluster
@@ -163,7 +197,7 @@ Resources:
             - !Ref SubnetId
             - !Ref SubnetB
           SecurityGroups:
-            - !If [isProduction, !Ref ContainerSecurityGroup, !Ref ContainerSecurityGroupId]
+            - !Ref ContainerSecurityGroup
       LoadBalancers:
         - ContainerName: !Ref ServiceName
           ContainerPort: !Ref ContainerPort
@@ -191,43 +225,11 @@ Resources:
             - !Ref SubnetId
             - !Ref SubnetB
           SecurityGroups:
-            - !If [isProduction, !Ref ContainerSecurityGroup, !Ref ContainerSecurityGroupId]
+            - !Ref ContainerSecurityGroupId
       LoadBalancers:
         - ContainerName: !Ref ServiceName
           ContainerPort: !Ref ContainerPort
-          TargetGroupArn: !Ref TargetGroup
-
-  TargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      HealthCheckIntervalSeconds: 30
-      # will look for a 200 status code by default unless specified otherwise
-      HealthCheckPath: !Ref HealthCheckPath
-      HealthCheckTimeoutSeconds: 5
-      UnhealthyThresholdCount: 2
-      HealthyThresholdCount: 2
-      Name: !Join ['-', [!Ref ServiceName, TargetGroup, !Ref Stage]]
-      Port: !Ref ContainerPort
-      Protocol: HTTP
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: 60 # default is 300
-      TargetType: ip
-      VpcId: !Ref VpcId
-  LoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Condition: isProduction
-    Properties:
-      LoadBalancerAttributes:
-        - Key: idle_timeout.timeout_seconds
-          Value: 60
-      Name: !Join ['-', [!Ref ServiceName, LoadBalancer, !Ref Stage]]
-      Scheme: internet-facing
-      SecurityGroups:
-        - !Ref LoadBalancerSecurityGroup
-      Subnets:
-        - !Ref SubnetId
-        - !Ref SubnetB
+          TargetGroupArn: !Ref TargetGroupARN
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:

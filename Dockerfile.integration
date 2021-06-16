@@ -16,4 +16,4 @@ RUN mvn -f /opt/poc-spring-app/pom.xml clean package -Dmaven.test.skip=true
 FROM 755242612616.dkr.ecr.us-west-2.amazonaws.com/ubuntu:latest
 WORKDIR /opt/poc-spring-app
 COPY --from=build /opt/poc-spring-app/target/poc-spring-app-1.0.jar target/poc-spring-app-1.0.jar
-CMD java -Dspring.profiles.active=integration -Dserver.port=80 -jar target/poc-spring-app-1.0.jar
+CMD java -Dspring.profiles.active=integration -Dserver.port=3001 -jar target/poc-spring-app-1.0.jar

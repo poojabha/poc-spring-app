@@ -75,9 +75,6 @@ Parameters:
     Type: String
     Description: Role need for autoscaling
     Default: arn:aws:iam::755242612616:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
-  TargetGroupARN:
-    Type: String
-    Default: arn:aws:elasticloadbalancing:us-west-2:755242612616:targetgroup/poc-spring-test/e88e82f7d45bd928
   ContainerSecurityGroupId:
     Type: String
     Default: sg-0eb60baceec61d3ba
@@ -170,7 +167,7 @@ Resources:
       LoadBalancers:
         - ContainerName: !Ref ServiceName
           ContainerPort: !Ref ContainerPort
-          TargetGroupArn: !If [isProduction, !Ref TargetGroup, !Ref TargetGroupARN]
+          TargetGroupArn: !Ref TargetGroup
   developmentService:
     Type: AWS::ECS::Service
     # This dependency is needed so that the load balancer is setup correctly in time
@@ -198,11 +195,10 @@ Resources:
       LoadBalancers:
         - ContainerName: !Ref ServiceName
           ContainerPort: !Ref ContainerPort
-          TargetGroupArn: !If [isProduction, !Ref TargetGroup, !Ref TargetGroupARN]
+          TargetGroupArn: !Ref TargetGroup
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: isProduction
     Properties:
       HealthCheckIntervalSeconds: 30
       # will look for a 200 status code by default unless specified otherwise

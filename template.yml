@@ -79,9 +79,13 @@ Parameters:
   ContainerSecurityGroupId:
     Type: String
     Default: sg-094e4ac8742de0b0a
+  ClusterARN:
+    Type: String
+    Default: arn:aws:ecs:us-west-2:755242612616:cluster/codestar-cluster-development
 Resources:
   Cluster:
     Type: AWS::ECS::Cluster
+    Condition: isProduction
     Properties:
       ClusterName: !Join ['-', [!Ref ServiceName, Cluster, !Ref Stage]]
   TaskDefinition:
@@ -208,7 +212,7 @@ Resources:
     Condition: isDevelopment
     Properties: 
       ServiceName: !Join ['-', [!Ref ServiceName, service, !Ref Stage]]
-      Cluster: !Ref Cluster
+      Cluster: !Ref ClusterARN
       TaskDefinition: !Ref TaskDefinition
       DeploymentConfiguration:
         MinimumHealthyPercent: 100
@@ -239,7 +243,7 @@ Resources:
     Properties:
       MinCapacity: !Ref MinContainers
       MaxCapacity: !Ref MaxContainers
-      ResourceId: !Join ['/', [service, !Ref Cluster, !If [isProduction, !GetAtt productionService.Name, !GetAtt developmentService.Name]]]
+      ResourceId: !Join ['/', [service, !If [isProduction, !Ref Cluster, !Ref ClusterARN], !If [isProduction, !GetAtt productionService.Name, !GetAtt developmentService.Name]]]
       ScalableDimension: ecs:service:DesiredCount
       ServiceNamespace: ecs
       # "The Amazon Resource Name (ARN) of an AWS Identity and Access Management (IAM) role that allows Application Auto Scaling to modify your scalable target."

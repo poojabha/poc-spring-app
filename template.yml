@@ -179,7 +179,7 @@ Resources:
     DependsOn:
       - ListenerHTTPS
     Properties:
-      ServiceName: !Join ['-', [!Ref ServiceName, LoadBalancer, !Ref Stage]]
+      ServiceName: !Join ['-', [!Ref ServiceName, service, !Ref Stage]]
       Cluster: !Ref Cluster
       TaskDefinition: !Ref TaskDefinition
       DeploymentConfiguration:
@@ -207,7 +207,7 @@ Resources:
     # This dependency is needed so that the load balancer is setup correctly in time
     Condition: isDevelopment
     Properties: 
-      ServiceName: !Join ['-', [!Ref ServiceName, LoadBalancer, !Ref Stage]]
+      ServiceName: !Join ['-', [!Ref ServiceName, service, !Ref Stage]]
       Cluster: !Ref Cluster
       TaskDefinition: !Ref TaskDefinition
       DeploymentConfiguration:

@@ -51,9 +51,6 @@ Parameters:
     Default: codestar
   ContainerPort:
     Type: Number
-  LoadBalancerPort:
-    Type: Number
-    Default: 80
   HealthCheckPath:
     Type: String
     Default: /health
@@ -76,35 +73,71 @@ Parameters:
     Default: arn:aws:iam::755242612616:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
   TargetGroupARN:
     Type: String
-  ContainerSecurityGroupId:
+    Description: Target group ARN for the service
+  LoadBalancerPortHTTP:
+    Type: Number
+    Default: 80
+  LoadBalancerPortHTTPS:
+    Type: Number
+    Default: 443
+  CertificateARN:
     Type: String
-    Default: sg-094e4ac8742de0b0a
+    Description: The ARN of the Amazon Certificate Manager
+    Default: arn:aws:acm:us-west-2:755242612616:certificate/eea725ed-77c6-47b8-bac8-730b3d29b39e
+  HealthCheckIntervalSeconds:
+    Type: Number
+    Default: 30
   ClusterARN:
     Type: String
-    Default: arn:aws:ecs:us-west-2:755242612616:cluster/codestar-cluster-development
+    Default: arn:aws:ecs:us-west-2:755242612616:cluster/poc-codestar-development
+  CPU:
+    Type: String
+    Description: The number of CPU units
+    Default: 256
+    AllowedValues:
+      - 256
+      - 512
+      - 1024
+      - 2048
+      - 4096
+  Memory:
+    Type: String
+    Description: The Amount of memory used by the task
+    Default: 0.5GB
+    AllowedValues:
+      - 0.5GB
+      - 1GB
+      - 2GB
+      - 3GB
+      - 4GB
+      - 5GB
+      - 6GB
+  LoadBalancerSecurityGroupId:
+    Type: String
+    Description: Security group Id of the loadbalancer
 Resources:
   Cluster:
     Type: AWS::ECS::Cluster
     Condition: isProduction
     Properties:
-      ClusterName: !Join ['-', [!Ref ServiceName, Cluster, !Ref Stage]]
+      ClusterName: !Join ['-', [!Ref ServiceName, cluster, production]]
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     DependsOn: LogGroup
     Properties:
-      Family: !Join ['-', [!Ref ServiceName, TaskDefinition, !Ref Stage]]
+      Family: !Join ['-', [!Ref ServiceName, td, !Ref Stage]]
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      Cpu: 256
-      Memory: 0.5GB
+      Cpu: !Ref CPU
+      Memory: !Ref Memory
       ExecutionRoleArn: !Ref ExecutionRole
       TaskRoleArn: !Ref ExecutionRole
       ContainerDefinitions:
         - Name: !Ref ServiceName
           Image: !Ref Image
           PortMappings:
-            - ContainerPort: !Ref ContainerPort
+            - ContainerPort: !Ref LoadBalancerPortHTTP
           # Send logs to CloudWatch Logs
           LogConfiguration:
             LogDriver: awslogs
@@ -116,35 +149,63 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Condition: isProduction
     Properties:
-      GroupDescription: !Join ['-', [!Ref ServiceName, LoadBalancerSecurityGroup, !Ref Stage]]
+      GroupName: !Join ['-', [!Ref ServiceName, alb, production]]
+      GroupDescription: !Join [' ', [!Ref ServiceName, alb, production]]
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: !Ref LoadBalancerPort
-          ToPort: !Ref LoadBalancerPort
+          FromPort: !Ref LoadBalancerPortHTTP
+          ToPort: !Ref LoadBalancerPortHTTP
           CidrIp: 0.0.0.0/0
-  ContainerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Condition: isProduction
-    Properties:
-      GroupDescription: !Join ['-', [!Ref ServiceName, ContainerSecurityGroup, !Ref Stage]]
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref LoadBalancerPortHTTP
+          ToPort: !Ref LoadBalancerPortHTTP
+          CidrIpv6: ::/0
+        - IpProtocol: tcp
+          FromPort: !Ref LoadBalancerPortHTTPS
+          ToPort: !Ref LoadBalancerPortHTTPS
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: !Ref LoadBalancerPortHTTPS
+          ToPort: !Ref LoadBalancerPortHTTPS
+          CidrIpv6: ::/0
         - IpProtocol: tcp
           FromPort: !Ref ContainerPort
           ToPort: !Ref ContainerPort
-          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          CidrIpv6: ::/0
+  ContainerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Join ['-', [!Ref ServiceName, sg, !Ref Stage]]
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+	- IpProtocol: tcp
+          FromPort: !Ref LoadBalancerPortHTTP
+          ToPort: !Ref LoadBalancerPortHTTP
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: !Ref LoadBalancerPortHTTP
+          ToPort: !Ref LoadBalancerPortHTTP
+          CidrIpv6: ::/0
+        - IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          SourceSecurityGroupId: !If [isProduction, !Ref LoadBalancerSecurityGroup, !Ref LoadBalancerSecurityGroupId]
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Condition: isProduction
     Properties:
-      HealthCheckIntervalSeconds: 30
+      HealthCheckIntervalSeconds: !Ref HealthCheckIntervalSeconds
       # will look for a 200 status code by default unless specified otherwise
       HealthCheckPath: !Ref HealthCheckPath
       HealthCheckTimeoutSeconds: 5
       UnhealthyThresholdCount: 2
       HealthyThresholdCount: 2
-      Name: !Join ['-', [!Ref ServiceName, TargetGroup, !Ref Stage]]
+      Name: !Join ['-', [!Ref ServiceName, tg, production]]
       Port: !Ref ContainerPort
       Protocol: HTTP
       TargetGroupAttributes:
@@ -159,39 +220,57 @@ Resources:
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: 60
-      Name: !Join ['-', [!Ref ServiceName, LoadBalancer, !Ref Stage]]
+      Name: !Join ['-', [!Ref ServiceName, alb, !Ref Stage]]
       Scheme: internet-facing
       SecurityGroups:
         - !Ref LoadBalancerSecurityGroup
       Subnets:
         - !Ref SubnetId
         - !Ref SubnetB
-  ListenerHTTPS:
+  ListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Condition: isProduction
     Properties:
-      DefaultActions:
+     DefaultActions:
+       - Type: redirect
+         RedirectConfig:
+           Protocol: HTTPS
+           Port: 443
+           Host: "#{host}"
+           Path: "/#{path}"
+           Query: "#{query}"
+           StatusCode: "HTTP_301"
+     LoadBalancerArn: !Ref LoadBalancer
+     Port: !Ref LoadBalancerPortHTTP
+     Protocol: HTTP
+  ListenerHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+     DefaultActions:
         - TargetGroupArn: !Ref TargetGroup
           Type: forward
-      LoadBalancerArn: !Ref LoadBalancer
-      Port: !Ref LoadBalancerPort
-      Protocol: HTTPS
+     Certificates:
+        - CertificateArn: !Ref CertificateARN
+     LoadBalancerArn: !Ref LoadBalancer
+     Port: !Ref LoadBalancerPortHTTPS
+     Protocol: HTTPS
   productionService:
     Type: AWS::ECS::Service
     # This dependency is needed so that the load balancer is setup correctly in time
     Condition: isProduction
     DependsOn:
       - ListenerHTTPS
+      - ListenerHTTP
     Properties:
-      ServiceName: !Join ['-', [!Ref ServiceName, service, !Ref Stage]]
+      ServiceName: !Join ['-', [!Ref ServiceName, service, production]]
       Cluster: !Ref Cluster
       TaskDefinition: !Ref TaskDefinition
       DeploymentConfiguration:
         MinimumHealthyPercent: 100
         MaximumPercent: 200
-      DesiredCount: 2
+      DesiredCount: 1
       # This may need to be adjusted if the container takes a while to start up
-      HealthCheckGracePeriodSeconds: 30
+      HealthCheckGracePeriodSeconds: !Ref HealthCheckIntervalSeconds
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -217,9 +296,9 @@ Resources:
       DeploymentConfiguration:
         MinimumHealthyPercent: 100
         MaximumPercent: 200
-      DesiredCount: 2
+      DesiredCount: 1
       # This may need to be adjusted if the container takes a while to start up
-      HealthCheckGracePeriodSeconds: 30
+      HealthCheckGracePeriodSeconds: !Ref HealthCheckIntervalSeconds
       LaunchType: FARGATE
       NetworkConfiguration: 
         AwsvpcConfiguration:
@@ -237,7 +316,7 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Join ['-', [/ecs/, !Ref ServiceName, TaskDefinition, !Ref Stage]]
+      LogGroupName: !Join ['/', [/ecs, !Ref ServiceName, log-group, !Ref Stage]]
   AutoScalingTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:

@@ -149,8 +149,8 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Condition: isProduction
     Properties:
-      GroupName: !Join ['-', [!Ref ServiceName, alb, production]]
-      GroupDescription: !Join [' ', [!Ref ServiceName, alb, production]]
+      GroupName: !Join ['-', [!Ref ServiceName, sg, production]]
+      GroupDescription: !Join [' ', [!Ref ServiceName, sg, production]]
       VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -180,10 +180,11 @@ Resources:
   ContainerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: !Join ['-', [!Ref ServiceName, sg, !Ref Stage]]
+      GroupName: !Join ['-', [!Ref ServiceName, sg, !Ref Stage]]
+      GroupDescription: !Join [' ', [!Ref ServiceName, sg, !Ref Stage]]
       VpcId: !Ref VpcId
       SecurityGroupIngress:
-	- IpProtocol: tcp
+        - IpProtocol: tcp
           FromPort: !Ref LoadBalancerPortHTTP
           ToPort: !Ref LoadBalancerPortHTTP
           CidrIp: 0.0.0.0/0

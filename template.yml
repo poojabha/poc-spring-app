@@ -137,7 +137,7 @@ Resources:
         - Name: !Ref ServiceName
           Image: !Ref Image
           PortMappings:
-            - ContainerPort: !Ref LoadBalancerPortHTTP
+            - ContainerPort: !Ref ContainerPort
           # Send logs to CloudWatch Logs
           LogConfiguration:
             LogDriver: awslogs
@@ -246,6 +246,7 @@ Resources:
      Protocol: HTTP
   ListenerHTTPS:
     Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: isProduction
     Properties:
      DefaultActions:
         - TargetGroupArn: !Ref TargetGroup
@@ -309,7 +310,7 @@ Resources:
             - !Ref SubnetId
             - !Ref SubnetB
           SecurityGroups:
-            - !Ref ContainerSecurityGroupId
+            - !Ref LoadBalancerSecurityGroupId
       LoadBalancers:
         - ContainerName: !Ref ServiceName
           ContainerPort: !Ref ContainerPort

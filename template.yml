@@ -43,9 +43,6 @@ Parameters:
     Default: dev
   SubnetB:
     Type: AWS::EC2::Subnet::Id
-  Image:
-    Type: String
-    Description: Docker repository ARN with tag.
   ServiceName:
     Type: String
     Default: codestar
@@ -63,33 +60,15 @@ Parameters:
   AutoScalingTargetValue:
     Type: Number
     Default: 50
-  ExecutionRole:
-    Type: String
-    Description: Role needed by ECS and containers
-    Default: arn:aws:iam::755242612616:role/poc-ecs-task-role
-  AutoscalingRole:
-    Type: String
-    Description: Role need for autoscaling
-    Default: arn:aws:iam::755242612616:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
-  TargetGroupARN:
-    Type: String
-    Description: Target group ARN for the service
   LoadBalancerPortHTTP:
     Type: Number
     Default: 80
   LoadBalancerPortHTTPS:
     Type: Number
     Default: 443
-  CertificateARN:
-    Type: String
-    Description: The ARN of the Amazon Certificate Manager
-    Default: arn:aws:acm:us-west-2:755242612616:certificate/eea725ed-77c6-47b8-bac8-730b3d29b39e
   HealthCheckIntervalSeconds:
     Type: Number
     Default: 30
-  ClusterARN:
-    Type: String
-    Default: arn:aws:ecs:us-west-2:755242612616:cluster/poc-codestar-development
   CPU:
     Type: String
     Description: The number of CPU units
@@ -112,9 +91,31 @@ Parameters:
       - 4GB
       - 5GB
       - 6GB
+  ExecutionRole:
+    Type: String
+    Description: Role needed by ECS and containers
+    Default: arn:aws:iam::755242612616:role/poc-ecs-task-role
+  AutoscalingRole:
+    Type: String
+    Description: Role need for autoscaling
+    Default: arn:aws:iam::755242612616:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService
+  ClusterARN:
+    Type: String
+    Description: Development cluster ARN
+    Default: arn:aws:ecs:us-west-2:755242612616:cluster/codestar-development
+  Image:
+    Type: String
+    #Override the value in deploy stage of the codepipeline
+    Description: Docker repository ARN with tag.
+  TargetGroupARN:
+    Type: String
+    #Override the value in deploy stage of the codepipeline
+    Description: Target group ARN for the service
   LoadBalancerSecurityGroupId:
     Type: String
+    #Override the value in deploy stage of the codepipeline
     Description: Security group Id of the loadbalancer
+
 Resources:
   Cluster:
     Type: AWS::ECS::Cluster
@@ -145,38 +146,6 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-group: !Ref LogGroup
               awslogs-stream-prefix: ecs
-  LoadBalancerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Condition: isProduction
-    Properties:
-      GroupName: !Join ['-', [!Ref ServiceName, sg, production]]
-      GroupDescription: !Join [' ', [!Ref ServiceName, sg, production]]
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: !Ref LoadBalancerPortHTTP
-          ToPort: !Ref LoadBalancerPortHTTP
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: !Ref LoadBalancerPortHTTP
-          ToPort: !Ref LoadBalancerPortHTTP
-          CidrIpv6: ::/0
-        - IpProtocol: tcp
-          FromPort: !Ref LoadBalancerPortHTTPS
-          ToPort: !Ref LoadBalancerPortHTTPS
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: !Ref LoadBalancerPortHTTPS
-          ToPort: !Ref LoadBalancerPortHTTPS
-          CidrIpv6: ::/0
-        - IpProtocol: tcp
-          FromPort: !Ref ContainerPort
-          ToPort: !Ref ContainerPort
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: !Ref ContainerPort
-          ToPort: !Ref ContainerPort
-          CidrIpv6: ::/0
   ContainerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -195,74 +164,11 @@ Resources:
         - IpProtocol: tcp
           FromPort: !Ref ContainerPort
           ToPort: !Ref ContainerPort
-          SourceSecurityGroupId: !If [isProduction, !Ref LoadBalancerSecurityGroup, !Ref LoadBalancerSecurityGroupId]
-  TargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: isProduction
-    Properties:
-      HealthCheckIntervalSeconds: !Ref HealthCheckIntervalSeconds
-      # will look for a 200 status code by default unless specified otherwise
-      HealthCheckPath: !Ref HealthCheckPath
-      HealthCheckTimeoutSeconds: 5
-      UnhealthyThresholdCount: 2
-      HealthyThresholdCount: 2
-      Name: !Join ['-', [!Ref ServiceName, tg, production]]
-      Port: !Ref ContainerPort
-      Protocol: HTTP
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: 60 # default is 300
-      TargetType: ip
-      VpcId: !Ref VpcId
-  LoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Condition: isProduction
-    Properties:
-      LoadBalancerAttributes:
-        - Key: idle_timeout.timeout_seconds
-          Value: 60
-      Name: !Join ['-', [!Ref ServiceName, alb, !Ref Stage]]
-      Scheme: internet-facing
-      SecurityGroups:
-        - !Ref LoadBalancerSecurityGroup
-      Subnets:
-        - !Ref SubnetId
-        - !Ref SubnetB
-  ListenerHTTP:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: isProduction
-    Properties:
-     DefaultActions:
-       - Type: redirect
-         RedirectConfig:
-           Protocol: HTTPS
-           Port: 443
-           Host: "#{host}"
-           Path: "/#{path}"
-           Query: "#{query}"
-           StatusCode: "HTTP_301"
-     LoadBalancerArn: !Ref LoadBalancer
-     Port: !Ref LoadBalancerPortHTTP
-     Protocol: HTTP
-  ListenerHTTPS:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: isProduction
-    Properties:
-     DefaultActions:
-        - TargetGroupArn: !Ref TargetGroup
-          Type: forward
-     Certificates:
-        - CertificateArn: !Ref CertificateARN
-     LoadBalancerArn: !Ref LoadBalancer
-     Port: !Ref LoadBalancerPortHTTPS
-     Protocol: HTTPS
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroupId
   productionService:
     Type: AWS::ECS::Service
     # This dependency is needed so that the load balancer is setup correctly in time
     Condition: isProduction
-    DependsOn:
-      - ListenerHTTPS
-      - ListenerHTTP
     Properties:
       ServiceName: !Join ['-', [!Ref ServiceName, service, production]]
       Cluster: !Ref Cluster

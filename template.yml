@@ -192,7 +192,7 @@ Resources:
       LoadBalancers:
         - ContainerName: !Ref ServiceName
           ContainerPort: !Ref ContainerPort
-          TargetGroupArn: !Ref TargetGroup
+          TargetGroupArn: !Ref TargetGroupARN
   developmentService:
     Type: AWS::ECS::Service
     # This dependency is needed so that the load balancer is setup correctly in time

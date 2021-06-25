@@ -12,8 +12,8 @@ phases:
       - mvn clean compile test
       - echo Logging in to Amazon ECR....
       - aws --version
-      - aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin $DOCKER_REPOSITORY
-      - REPOSITORY_URI=$DOCKER_REPOSITORY/$REPOSITORY_NAME
+      - aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin $DOCKER_REPOSITORY_URI
+      - REPOSITORY_URI=$DOCKER_REPOSITORY_URI/$REPOSITORY_NAME
       - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - IMAGE_TAG=${COMMIT_HASH:=latest}
   build:

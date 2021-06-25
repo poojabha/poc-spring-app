@@ -53,7 +53,7 @@ Parameters:
     Default: /health
   MinContainers:
     Type: Number
-    Default: 2
+    Default: 1
   MaxContainers:
     Type: Number
     Default: 10
